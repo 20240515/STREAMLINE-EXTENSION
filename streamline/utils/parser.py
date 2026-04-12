@@ -5,9 +5,11 @@ from streamline.utils.parser_helpers import parse_general, parse_replicate
 from streamline.utils.parser_helpers import parse_logistic
 from streamline.utils.parser_helpers import parser_function_all
 from streamline.utils.parser_helpers import PARSER_LIST
-
+from streamline.utils.parser_helpers import build_ga_config_from_params
 
 def process_params(params):
+    
+    params['run_cluster'] = False
     if params['run_cluster'] not in [False, "False"]:
         params['run_parallel'] = True
 
@@ -15,7 +17,7 @@ def process_params(params):
         params["do_eda"] = True
         params["do_dataprep"] = True
         params["do_feat_imp"] = True
-        params["do_feat_sel"] = True
+        params["do_feat_sel"] = False if params.get('do_ga_opt') else True
         params["do_model"] = True
         params["do_stats"] = True
         params["do_compare_dataset"] = True
@@ -52,6 +54,46 @@ def process_params(params):
         params['run_parallel'] = False
     if params['run_parallel'] == "True":
         params['run_parallel'] = True
+
+    # -----------------------------
+    # Genetic Algorithm (GA) setup
+    # -----------------------------
+    if 'do_ga_opt' not in params:
+        params['do_ga_opt'] = False
+
+    if params.get('do_ga_opt', False):
+        # Ensure required phases
+        params['do_model'] = True
+        params['do_feat_imp'] = True
+
+        # Disable classical feature selection (GA replaces it)
+        params['do_feat_sel'] = False
+
+        # Safety: disable internal FS flag if present
+        if 'filter_poor_features' in params:
+            params['filter_poor_features'] = False
+
+        
+        params['ga_config'] = build_ga_config_from_params(params)
+
+    else:
+        params['ga_config'] = None
+
+    
+    if 'ga_multi_phase_search' not in params:
+        params['ga_multi_phase_search'] = False
+
+    if 'ga_phase1_models' not in params:
+        params['ga_phase1_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+
+    if 'ga_final_models' not in params:
+        params['ga_final_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+
+    if params.get('ga_multi_phase_search', False):
+        params['do_ga_opt'] = True
+        params['do_feat_imp'] = True
+        params['do_feat_sel'] = False
+        params['do_model'] = True
 
     return params
 

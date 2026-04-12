@@ -83,7 +83,7 @@ class FeatureImportanceRunner:
                 dataset_paths.remove(text)
 
         job_list = list()
-
+ 
         for dataset_directory_path in dataset_paths:
             full_path = self.output_path + "/" + self.experiment_name + "/" + dataset_directory_path
             experiment_path = self.output_path + '/' + self.experiment_name
@@ -111,10 +111,12 @@ class FeatureImportanceRunner:
                     job_obj = FeatureImportance(cv_train_path, experiment_path, self.class_label,
                                                 self.instance_label, self.instance_subset, "MI",
                                                 self.use_turf, self.turf_pct, self.random_state, self.n_jobs)
+                    
                     if run_parallel:
                         # p = multiprocessing.Process(target=runner_fn, args=(job_obj,))
                         job_list.append(job_obj)
                     else:
+                        # print("Running feature importance job for dataset " + cv_train_path + " with algorithm MI")
                         job_obj.run()
 
             if "MS" in self.algorithms:

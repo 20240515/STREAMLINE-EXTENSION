@@ -10,8 +10,11 @@ class RandomForestClassifier(BaseModel, ABC):
     color = "blue"
 
     def __init__(self, cv_folds=3, scoring_metric='balanced_accuracy',
-                 metric_direction='maximize', random_state=None, cv=None, n_jobs=None):
-        super().__init__(RF, "Random Forest", cv_folds, scoring_metric, metric_direction, random_state, cv)
+                 metric_direction='maximize', random_state=None, cv=None, n_jobs=None,
+                 optimizer_backend='optuna', ga_config=None):
+        
+        super().__init__(RF, "Random Forest", cv_folds=cv_folds, scoring_metric=scoring_metric, metric_direction=metric_direction, random_state=random_state, cv=cv, n_jobs=n_jobs,
+                         optimizer_backend=optimizer_backend, ga_config=ga_config)
         self.param_grid = get_parameters(self.model_name)
         self.param_grid['random_state'] = [random_state, ]
         self.small_name = "RF"

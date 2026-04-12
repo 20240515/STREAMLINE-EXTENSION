@@ -9,8 +9,10 @@ class ElasticNetClassifier(BaseModel, ABC):
     color = "aquamarine"
 
     def __init__(self, cv_folds=3, scoring_metric='balanced_accuracy',
-                 metric_direction='maximize', random_state=None, cv=None, n_jobs=None):
-        super().__init__(SGD, "Elastic Net", cv_folds, scoring_metric, metric_direction, random_state, cv)
+                 metric_direction='maximize', random_state=None, cv=None, n_jobs=None,
+                 optimizer_backend='optuna', ga_config=None):
+        super().__init__(SGD, "Elastic Net", cv_folds, scoring_metric, metric_direction, random_state, cv, n_jobs,
+                         optimizer_backend = optimizer_backend, ga_config = ga_config)
         self.param_grid = {'penalty': ['elasticnet'], 'loss': ['log_loss', 'modified_huber'], 'alpha': [0.04, 0.05],
                            'max_iter': [1000, 2000], 'l1_ratio': [0.001, 0.1], 'class_weight': [None, 'balanced'],
                            'random_state': [random_state, ]}

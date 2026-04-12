@@ -4,6 +4,7 @@
 *.pyc
 __pycache__
 .pytest_cache
+.venv/
 demo/
 catboost_info/
 dask_logs/
@@ -29,3 +30,8 @@ run_configs/cedars_plco.cfg
 run_configs/cedars_gametes.cfg
 exp_configs/
 exp_data/.venv/
+outputtest/
+Streamline alterado 2/
+Streamline alterado.zip
+tests_GA/
+data/output_teste/

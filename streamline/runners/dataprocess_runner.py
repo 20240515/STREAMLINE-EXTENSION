@@ -141,6 +141,9 @@ class DataProcessRunner:
         self.save_metadata()
 
     def run(self, run_parallel=False):
+        # print("Running EDA on datasets in " + self.data_path + " and saving output to " + self.output_path + '/' + self.experiment_name)
+        # print("run_parallel value:", run_parallel)
+
         file_count, job_counter = 0, 0
         unique_datanames = []
         job_obj_list = []
@@ -150,7 +153,6 @@ class DataProcessRunner:
             # is both a .txt and .csv version of dataset with same name.
             file_extension = dataset_path.split('/')[-1].split('.')[-1]
             data_name = dataset_path.split('/')[-1].split('.')[0]
-
             if file_extension == 'txt' or file_extension == 'csv' or file_extension == 'tsv':
                 if data_name not in unique_datanames:
                     unique_datanames.append(data_name)
@@ -166,9 +168,15 @@ class DataProcessRunner:
                     if self.run_cluster == "LSFOld":
                         self.submit_lsf_cluster_job(dataset_path)
                         continue
+                    
+
+                    # print("Submitting EDA job for dataset " + dataset_path)
                     dataset = Dataset(dataset_path, self.class_label, self.match_label, self.instance_label)
                     # Ryan - dataset loading has to take place on individual compute nodes
-                    # (bare minimum can be running on head node for cluster parallelization)
+                    # (bare minimum can be running on head node for cluster parallelization)~
+                    # print("Loading dataset " + dataset_path)
+                    # print("run_parallel value:", run_parallel)
+
                     job_obj = DataProcess(dataset, self.output_path + '/' + self.experiment_name,
                                           self.ignore_features,
                                           self.categorical_features, self.quantitative_features,
@@ -177,27 +185,31 @@ class DataProcessRunner:
                                           self.cleaning_missingness, self.correlation_removal_threshold,
                                           self.partition_method, self.n_splits,
                                           self.random_state, self.show_plots)
+                    # print("Finished loading dataset " + dataset_path)
+                    # print("DEBUG: job_obj criado:", type(job_obj))
                     job_obj_list.append(job_obj)
+                    
+                    # print("DEBUG: run_parallel value:", run_parallel)
                     # Cluster vs Non Cluster irrelevant as now local jobs are parallel too
                     if not run_parallel:  # Run as job in parallel
+                        # print("Running EDA job for dataset " + dataset_path)
                         job_obj_list[-1].run(self.top_features)
                     job_counter += 1
 
             if file_count == 0:  # Check that there was at least 1 dataset
                 raise Exception("There must be at least one .txt, .tsv, or .csv dataset in data_path directory")
-
         if run_parallel and run_parallel != "False" and not self.run_cluster:
             Parallel(n_jobs=num_cores)(
                 delayed(
                     parallel_eda_call
                 )(job_obj, {'top_features': self.top_features}) for job_obj in job_obj_list)
-
         if self.run_cluster and "Old" not in self.run_cluster:
             get_cluster(self.run_cluster,
                         self.output_path + '/' + self.experiment_name, self.queue, self.reserved_memory)
             dask.compute([dask.delayed(
                 parallel_eda_call
             )(job_obj, {'top_features': self.top_features}) for job_obj in job_obj_list])
+        # print("Submitted " + str(job_counter) + " EDA jobs for " + str(file_count) + " unique datasets.")
 
     def make_dir_tree(self):
         """

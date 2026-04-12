@@ -4,6 +4,12 @@ import argparse
 import logging
 from streamline.modeling.utils import SUPPORTED_MODELS_SMALL
 
+#GA
+from streamline.optimization.selection import SelectionConfig
+from streamline.optimization.crossover import CrossoverConfig
+from streamline.optimization.mutation import MutationConfig
+from streamline.optimization.genetic_optimizer import GeneticOptimizerConfig
+
 
 def process_cli_param(param):
     if param == "None":
@@ -290,7 +296,256 @@ def parse_model(argv, params_dict=None):
                         default=2000)
     parser.add_argument('--lcs-timeout', dest='lcs_timeout', type=int, help='seconds until hyper parameter sweep stops '
                                                                             'for LCS algorithms', default=1200)
+    
+    # -----------------------------
+    # Genetic Algorithm (GA) optimization
+    # -----------------------------
+
+    parser.add_argument('--do-ga-opt', dest='do_ga_opt', type=str2bool, nargs='?', const=True,
+                        help='Use genetic algorithm for joint feature selection and hyperparameter optimization during modeling.',
+                        default=False)
+
+    parser.add_argument('--ga-population-size', dest='ga_population_size', type=int,
+                        help='GA population size.',
+                        default=30)
+
+    parser.add_argument('--ga-n-generations', dest='ga_n_generations', type=int,
+                        help='Number of GA generations.',
+                        default=20)
+
+    parser.add_argument('--ga-m-init-ratio', dest='ga_m_init_ratio', type=float,
+                        help='Initial proportion of features selected per chromosome.',
+                        default=0.2)
+
+    parser.add_argument('--ga-elitism', dest='ga_elitism', type=int,
+                        help='Number of elite individuals preserved in each generation.',
+                        default=2)
+
+    parser.add_argument('--ga-lam', dest='ga_lam', type=float,
+                        help='Penalty coefficient for feature subset size in fitness.',
+                        default=0.05)
+
+    parser.add_argument('--ga-use-importance-bias', dest='ga_use_importance_bias',
+                        type=str2bool, nargs='?', const=True,
+                        help='Bias initial population with feature importance scores from phase 3.',
+                        default=True)
+    
+    parser.add_argument('--ga-return-history', dest='ga_return_history',
+                        type=str2bool, nargs='?', const=True,
+                        help='Store generation-wise GA history.',
+                        default=True)
+
+    # Selection
+    parser.add_argument('--ga-selection-method', dest='ga_selection_method', type=str,
+                        help='GA parent selection method: tournament, rank, truncation, random.',
+                        default='tournament')
+
+    parser.add_argument('--ga-tournament-k', dest='ga_tournament_k', type=int,
+                        help='Tournament size for tournament selection.',
+                        default=3)
+
+    parser.add_argument('--ga-rank-eta', dest='ga_rank_eta', type=float,
+                        help='Selective pressure parameter for linear rank selection.',
+                        default=1.7)
+
+    parser.add_argument('--ga-truncation-top-frac', dest='ga_truncation_top_frac', type=float,
+                        help='Top fraction of population used in truncation selection.',
+                        default=0.5)
+
+    # Crossover
+    parser.add_argument('--ga-p-crossover', dest='ga_p_crossover', type=float,
+                        help='Probability of applying crossover.',
+                        default=0.9)
+
+    parser.add_argument('--ga-mask-method', dest='ga_mask_method', type=str,
+                        help='Feature mask crossover method: uniform or one_point.',
+                        default='uniform')
+
+    parser.add_argument('--ga-hp-method', dest='ga_hp_method', type=str,
+                        help='Hyperparameter crossover method.',
+                        default='uniform')
+
+    parser.add_argument('--ga-p-swap-hp', dest='ga_p_swap_hp', type=float,
+                        help='Probability of inheriting each hyperparameter from parent A in uniform crossover.',
+                        default=0.5)
+
+    # Mutation
+    parser.add_argument('--ga-p-flip', dest='ga_p_flip', type=float,
+                        help='Bit-flip mutation probability per feature. If omitted, defaults to 1/M.',
+                        default=None)
+
+    parser.add_argument('--ga-max-flips', dest='ga_max_flips', type=int,
+                        help='Maximum number of feature flips per individual.',
+                        default=None)
+
+    parser.add_argument('--ga-p-hp-mut', dest='ga_p_hp_mut', type=float,
+                        help='Probability of mutating hyperparameters in an individual.',
+                        default=0.3)
+
+    parser.add_argument('--ga-hp-mut-frac', dest='ga_hp_mut_frac', type=float,
+                        help='Fraction of hyperparameters to mutate when hyperparameter mutation occurs.',
+                        default=0.3)
+
+    parser.add_argument('--ga-hp-mut-min', dest='ga_hp_mut_min', type=int,
+                        help='Minimum number of hyperparameters to mutate.',
+                        default=1)
+    
+    #-------------------------
+    # Early stopping do GA
+    #-------------------------
+    parser.add_argument('--ga-early-stop', dest='ga_early_stop', type=str2bool, nargs='?', const=True,
+                        help='Enable GA early stopping.',
+                        default=False)
+
+    parser.add_argument('--ga-early-stop-patience', dest='ga_early_stop_patience', type=int,
+                        help='GA early stopping patience.',
+                        default=5)
+
+    parser.add_argument('--ga-early-stop-min-delta', dest='ga_early_stop_min_delta', type=float,
+                        help='Minimum fitness improvement required to reset GA early stopping patience.',
+                        default=1e-3)
+
+    parser.add_argument('--ga-early-stop-min-generations', dest='ga_early_stop_min_generations', type=int,
+                        help='Minimum number of generations before GA early stopping can trigger.',
+                        default=5)
+    # -----------------------------
+    # Automatic multi-phase GA search
+    # -----------------------------
+    parser.add_argument('--ga-multi-phase-search', dest='ga_multi_phase_search',
+                        type=str2bool, nargs='?', const=True,
+                        help='Run the automatic 3-phase GA configuration search.',
+                        default=False)
+
+    parser.add_argument('--ga-phase1-models', dest='ga_phase1_models',
+                        type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
+                        help='Representative models used in phase 1.',
+                        default='LR,RF,SVM')
+
+    parser.add_argument('--ga-final-models', dest='ga_final_models',
+                        type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
+                        help='Final model subset used in phase 3.',
+                        default='LR,RF,SVM')
+
+    parser.add_argument('--ga-phase1-top-k', dest='ga_phase1_top_k', type=int,
+                        help='Number of top phase-1 configurations to keep.',
+                        default=3)
+
+    parser.add_argument('--ga-phase2-top-k', dest='ga_phase2_top_k', type=int,
+                        help='Number of top phase-2 configurations to keep.',
+                        default=2)
+
+    parser.add_argument('--ga-phase1-population-size', dest='ga_phase1_population_size', type=int,
+                        help='Phase 1 GA population size.',
+                        default=10)
+
+    parser.add_argument('--ga-phase1-n-generations', dest='ga_phase1_n_generations', type=int,
+                        help='Phase 1 number of generations.',
+                        default=5)
+
+    parser.add_argument('--ga-phase2-population-size', dest='ga_phase2_population_size', type=int,
+                        help='Phase 2 GA population size.',
+                        default=20)
+
+    parser.add_argument('--ga-phase2-n-generations', dest='ga_phase2_n_generations', type=int,
+                        help='Phase 2 number of generations.',
+                        default=10)
+
+    parser.add_argument('--ga-phase3-population-size', dest='ga_phase3_population_size', type=int,
+                        help='Phase 3 GA population size.',
+                        default=30)
+
+    parser.add_argument('--ga-phase3-n-generations', dest='ga_phase3_n_generations', type=int,
+                        help='Phase 3 number of generations.',
+                        default=20)
+    
+    parser.add_argument('--ga-phase1-pop-min', dest='ga_phase1_pop_min', type=int,
+                        help='Minimum phase 1 population size when using adaptive population.',
+                        default=20)
+
+    parser.add_argument('--ga-phase1-pop-max', dest='ga_phase1_pop_max', type=int,
+                        help='Maximum phase 1 population size when using adaptive population.',
+                        default=40)
+
+    parser.add_argument('--ga-phase1-pop-feature-frac', dest='ga_phase1_pop_feature_frac', type=float,
+                        help='Phase 1 adaptive population fraction of number of features.',
+                        default=0.25)
+
+    parser.add_argument('--ga-phase2-pop-min', dest='ga_phase2_pop_min', type=int,
+                        help='Minimum phase 2 population size when using adaptive population.',
+                        default=25)
+
+    parser.add_argument('--ga-phase2-pop-max', dest='ga_phase2_pop_max', type=int,
+                        help='Maximum phase 2 population size when using adaptive population.',
+                        default=60)
+
+    parser.add_argument('--ga-phase2-pop-feature-frac', dest='ga_phase2_pop_feature_frac', type=float,
+                        help='Phase 2 adaptive population fraction of number of features.',
+                        default=0.35)
+
+    parser.add_argument('--ga-phase3-early-stop', dest='ga_phase3_early_stop', type=str2bool, nargs='?', const=True,
+                        help='Enable early stopping in phase 3.',
+                        default=True)
+
+    parser.add_argument('--ga-phase3-early-stop-patience', dest='ga_phase3_early_stop_patience', type=int,
+                        help='Phase 3 early stopping patience.',
+                        default=7)
+
+    parser.add_argument('--ga-phase3-early-stop-min-delta', dest='ga_phase3_early_stop_min_delta', type=float,
+                        help='Phase 3 early stopping minimum delta.',
+                        default=5e-4)
+
+    parser.add_argument('--ga-phase3-early-stop-min-generations', dest='ga_phase3_early_stop_min_generations', type=int,
+                        help='Phase 3 minimum generations before early stopping.',
+                        default=10)
+    
+
+
     return update_dict_from_parser(argv, parser, params_dict)
+
+def build_ga_config_from_params(params):
+    """
+    Build GeneticOptimizerConfig from parsed CLI parameters.
+    """
+    selection_cfg = SelectionConfig(
+        method=params['ga_selection_method'],
+        tournament_k=params['ga_tournament_k'],
+        rank_eta=params['ga_rank_eta'],
+        truncation_top_frac=params['ga_truncation_top_frac'],
+    )
+
+    crossover_cfg = CrossoverConfig(
+        p_crossover=params['ga_p_crossover'],
+        mask_method=params['ga_mask_method'],
+        hp_method=params['ga_hp_method'],
+        p_swap_hp=params['ga_p_swap_hp'],
+    )
+
+    mutation_cfg = MutationConfig(
+        p_flip=params['ga_p_flip'],
+        max_flips=params['ga_max_flips'],
+        p_hp_mut=params['ga_p_hp_mut'],
+        hp_mut_frac=params['ga_hp_mut_frac'],
+        hp_mut_min=params['ga_hp_mut_min'],
+    )
+
+    ga_cfg = GeneticOptimizerConfig(
+        population_size=params['ga_population_size'],
+        n_generations=params['ga_n_generations'],
+        m_init_ratio=params['ga_m_init_ratio'],
+        elitism=params['ga_elitism'],
+        lam=params['ga_lam'],
+        use_importance_bias=params['ga_use_importance_bias'],
+        return_history=params['ga_return_history'],
+        early_stop=params.get('ga_early_stop', False),
+        early_stop_patience=params.get('ga_early_stop_patience', 5),
+        early_stop_min_delta=params.get('ga_early_stop_min_delta', 1e-3),
+        early_stop_min_generations=params.get('ga_early_stop_min_generations', 5),
+        selection_cfg=selection_cfg,
+        crossover_cfg=crossover_cfg,
+        mutation_cfg=mutation_cfg,
+    )
+
+    return ga_cfg
 
 
 def parse_stats(argv, params_dict=None):

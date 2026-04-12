@@ -27,7 +27,7 @@ for idx in range(len(phase_number)):
         phase_number[idx] = " (" + str(phase_number[idx]) + ") "
 
 
-def runner(obj, phase, run_parallel=True, params=None):
+def runner(obj, phase, run_parallel=False, params=None):
     start = time.time()
 
     phase_str = phase_list[phase]
@@ -115,8 +115,10 @@ def run(params):
                                 run_cluster=params['run_cluster'],
                                 queue=params['queue'],
                                 reserved_memory=params['reserved_memory'])
-
+        
         runner(eda, 1, run_parallel=params['run_parallel'], params=params)
+
+        # print('Finished EDA phase, moving on to next phases...')
 
     if params['do_dataprep']:
         from streamline.runners.imputation_runner import ImputationRunner
@@ -131,6 +133,7 @@ def run(params):
         runner(dpr, 2, run_parallel=params['run_parallel'], params=params)
 
     if params['do_feat_imp']:
+        
         from streamline.runners.feature_runner import FeatureImportanceRunner
         f_imp = FeatureImportanceRunner(params['output_path'], params['experiment_name'],
                                         class_label=params['class_label'],
@@ -160,41 +163,38 @@ def run(params):
                                        reserved_memory=params['reserved_memory'])
         runner(f_sel, 4, run_parallel=params['run_parallel'], params=params)
 
-    # *******************************************************   
-    if params.get('do_ga_opt', False):
-        from streamline.runners.ga_runners import GAOptimizationRunner
-
-        ga_runner = GAOptimizationRunner(
-            output_path=params['output_path'],
-            experiment_name=params['experiment_name'],
-            **params
-        )
-
-        runner(ga_runner, 5, run_parallel=params['run_parallel'], params=params)
-
-    # *******************************************************
-
     if params['do_model']:
-        from streamline.runners.model_runner import ModelExperimentRunner
-        model = ModelExperimentRunner(params['output_path'], params['experiment_name'],
-                                      algorithms=params['algorithms'], exclude=params['exclude'],
-                                      class_label=params['class_label'],
-                                      instance_label=params['instance_label'], scoring_metric=params['primary_metric'],
-                                      metric_direction=params['metric_direction'],
-                                      training_subsample=params['training_subsample'],
-                                      use_uniform_fi=params['use_uniform_fi'],
-                                      n_trials=params['n_trials'],
-                                      timeout=params['timeout'], save_plots=False, do_lcs_sweep=params['do_lcs_sweep'],
-                                      lcs_nu=params['lcs_nu'],
-                                      lcs_n=params['lcs_n'],
-                                      lcs_iterations=params['lcs_iterations'],
-                                      lcs_timeout=params['lcs_timeout'], resubmit=params['model_resubmit'],
-                                      random_state=params['random_state'], n_jobs=params['n_jobs'],
-                                      run_cluster=params['run_cluster'],
-                                      queue=params['queue'],
-                                      reserved_memory=params['reserved_memory'])
+        print("Checking if Modeling output already exists...")
+        if params.get('do_ga_opt', False):
+            print("GA optimization enabled, running GAExperimentsRunner")
+            from streamline.runners.ga_experiments_runner import GAExperimentsRunner
+            ga_search = GAExperimentsRunner(params)
+            ga_search.run()
+            return
+        else:
+            print("GA Multi-Phase Search not enabled, running Model Experiments Runner")
+            from streamline.runners.model_runner import ModelExperimentRunner
+            model = ModelExperimentRunner(params['output_path'], params['experiment_name'],
+                                        algorithms=params['algorithms'], exclude=params['exclude'],
+                                        class_label=params['class_label'],
+                                        instance_label=params['instance_label'], scoring_metric=params['primary_metric'],
+                                        metric_direction=params['metric_direction'],
+                                        training_subsample=params['training_subsample'],
+                                        use_uniform_fi=params['use_uniform_fi'],
+                                        n_trials=params['n_trials'],
+                                        timeout=params['timeout'], save_plots=False, do_lcs_sweep=params['do_lcs_sweep'],
+                                        lcs_nu=params['lcs_nu'],
+                                        lcs_n=params['lcs_n'],
+                                        lcs_iterations=params['lcs_iterations'],
+                                        lcs_timeout=params['lcs_timeout'], resubmit=params['model_resubmit'],
+                                        random_state=params['random_state'], n_jobs=params['n_jobs'],
+                                        run_cluster=params['run_cluster'],
+                                        queue=params['queue'],
+                                        reserved_memory=params['reserved_memory'],
+                                        do_ga_opt=False,
+                                        ga_config=None)
 
-        runner(model, 5, run_parallel=params['run_parallel'], params=params)
+            runner(model, 5, run_parallel=params['run_parallel'], params=params)
 
     if params['do_stats']:
         from streamline.runners.stats_runner import StatsRunner

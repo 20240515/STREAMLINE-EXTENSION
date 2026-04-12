@@ -5,6 +5,7 @@ import glob
 import pickle
 import time
 import dask
+import json
 from tqdm import tqdm
 from pathlib import Path
 from joblib import Parallel, delayed
@@ -30,7 +31,8 @@ class ModelExperimentRunner:
                  timeout=900, save_plots=False, do_lcs_sweep=False, lcs_nu=1, lcs_n=2000, lcs_iterations=200000,
                  lcs_timeout=1200, resubmit=False, random_state=None, n_jobs=None,
                  run_cluster=False,
-                 queue='defq', reserved_memory=4):
+                 queue='defq', reserved_memory=4,
+                do_ga_opt=False, ga_config=None):
 
         """
         Args:
@@ -58,6 +60,8 @@ class ModelExperimentRunner:
             lcs_iterations: fixed LCS number of learning iterations param, default=200000
             lcs_n: fixed LCS rule population maximum size param, default=2000
             lcs_timeout: seconds until hyperparameter sweep stops for LCS algorithms, default=1200
+            do_ga_opt: if True, instantiate supported models with GA backend instead of Optuna
+            ga_config: GA configuration object passed to models
 
         """
         self.cv_count = None
@@ -114,6 +118,10 @@ class ModelExperimentRunner:
         self.queue = queue
         self.reserved_memory = reserved_memory
 
+        self.do_ga_opt = do_ga_opt
+        self.ga_config = ga_config
+
+
         # Argument checks
         if not os.path.exists(self.output_path):
             raise Exception("Output path must exist (from phase 1) before phase 4 can begin")
@@ -147,7 +155,7 @@ class ModelExperimentRunner:
 
         file = open(self.output_path + '/' + self.experiment_name + '/' + "metadata.pickle", 'rb')
         metadata = pickle.load(file)
-        filter_poor_features = metadata['Filter Poor Features']
+        filter_poor_features = metadata.get('Filter Poor Features', False)
         file.close()
 
         for dataset_directory_path in dataset_paths:
@@ -166,6 +174,7 @@ class ModelExperimentRunner:
             cv_partitions = len(cv_dataset_paths)
             for cv_count in range(cv_partitions):
                 for algorithm in self.algorithms:
+                    print(f"\n[MODEL RUNNER] Running model: {algorithm}")
                     abbrev = ABBREVIATION[algorithm]
                     target_file = 'job_model_' + dataset_directory_path + '_' + str(cv_count) + '_' + \
                                   abbrev + '.txt'
@@ -183,11 +192,21 @@ class ModelExperimentRunner:
 
                     # logging.info("Running Model "+str(algorithm))
                     if algorithm not in ['eLCS', 'XCS', 'ExSTraCS']:
-                        model = model_str_to_obj(algorithm)(cv_folds=3,
-                                                            scoring_metric=self.scoring_metric,
-                                                            metric_direction=self.metric_direction,
-                                                            random_state=self.random_state,
-                                                            cv=None, n_jobs=self.n_jobs)
+
+                        if self.do_ga_opt:
+                            model = model_str_to_obj(algorithm)(cv_folds=3,
+                                                                scoring_metric=self.scoring_metric,
+                                                                metric_direction=self.metric_direction,
+                                                                random_state=self.random_state,
+                                                                cv=None, n_jobs=self.n_jobs,
+                                                                optimizer_backend='ga',
+                                                                ga_config=self.ga_config)
+                        else:
+                            model = model_str_to_obj(algorithm)(cv_folds=3,
+                                                                scoring_metric=self.scoring_metric,
+                                                                metric_direction=self.metric_direction,
+                                                                random_state=self.random_state,
+                                                                cv=None, n_jobs=self.n_jobs)
                     else:
                         if algorithm == 'ExSTraCS':
                             expert_knowledge = get_fi_for_ExSTraCS(self.output_path, self.experiment_name,
@@ -281,6 +300,9 @@ class ModelExperimentRunner:
         metadata['Training Iterations'] = self.lcs_iterations
         metadata['N (Rule Population Size)'] = self.lcs_n
         metadata['LCS Hyperparameter Sweep Timeout'] = self.lcs_timeout
+        metadata['GA Hyperparameter Optimization'] = self.do_ga_opt
+        metadata['Optimization Backend'] = 'ga' if self.do_ga_opt else 'optuna'
+        metadata['GA Config Provided'] = self.ga_config is not None
         # Pickle the metadata for future use
         pickle_out = open(self.output_path + '/' + self.experiment_name + '/' + "metadata.pickle", 'wb')
         pickle.dump(metadata, pickle_out)
