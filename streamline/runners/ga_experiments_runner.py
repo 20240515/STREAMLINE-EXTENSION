@@ -238,6 +238,9 @@ class GAExperimentsRunner:
                         "early_stop": False,
                     }
 
+                    print(f"\n[Phase 1 - Experiment {exp_id}] Running with configuration:")
+                    print(selection_method, crossover_method, mutation_profile["name"])
+                    
                     params = self.build_params_for_experiment(
                         exp_cfg=exp_cfg,
                         phase_name=phase_name,
