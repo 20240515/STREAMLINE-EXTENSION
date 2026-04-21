@@ -5,6 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import numpy as np
 
+from streamline.utils import fi_scores
+
 from .chromosome import Chromosome
 from .population import Population
 from .fitness import FitnessCache
@@ -151,6 +153,12 @@ class GeneticOptimizer:
         history: List[Dict[str, Any]] = []
         fitness_cache = FitnessCache()
 
+
+        print("\n[DEBUG before Population.random_init]")
+        print("use_importance_bias =", self.cfg.use_importance_bias)
+        print("fi_scores is None =", fi_scores is None)
+        print("n fi_scores =", None if fi_scores is None else len(fi_scores))
+
         population = Population.random_init(
             basemodel=basemodel,
             X_train=X_train,
@@ -160,6 +168,7 @@ class GeneticOptimizer:
             fi_scores=fi_scores,
             use_importance_bias=bool(self.cfg.use_importance_bias),
         )
+
         print(f"Initial population of size {len(population)} created.")
         print(f"type(population) = {type(population)}")
 

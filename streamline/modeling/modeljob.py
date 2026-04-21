@@ -177,6 +177,15 @@ class ModelJob(Job):
         self.pre_model_fi_scores = None
         if getattr(model, 'optimizer_backend', None) == 'ga':
             self.pre_model_fi_scores = self.load_pre_model_fi_scores()
+            
+        print("[DEBUG run_model] pre_model_fi_scores is None =", self.pre_model_fi_scores is None)
+
+        if self.pre_model_fi_scores is not None:
+            print("[DEBUG run_model] n fi_scores =", len(self.pre_model_fi_scores))
+            print("[DEBUG run_model] primeiros 10 fi_scores =", self.pre_model_fi_scores[:10])
+            print("[DEBUG run_model] soma fi_scores =", float(np.sum(self.pre_model_fi_scores)))
+            print("[DEBUG run_model] min fi_score =", float(np.min(self.pre_model_fi_scores)))
+            print("[DEBUG run_model] max fi_score =", float(np.max(self.pre_model_fi_scores)))
 
         model.fit(x_train, y_train, self.n_trials, self.timeout, self.feature_names, fi_scores=self.pre_model_fi_scores)
        
