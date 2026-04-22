@@ -97,8 +97,6 @@ class Population:
 
             # --- Feature mask ---
             if use_importance_bias:
-                print("[DEBUG Population.random_init] Using importance bias for feature mask initialization.")
-                mask = _init_feature_mask_biased(
                     M=M,
                     m_init=m_init,
                     rng=rng,

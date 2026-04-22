@@ -96,10 +96,10 @@ class BaseModel:
 
         print("DEBUG BaseModel:")
         print("  model_name =", self.model_name)
-        print("  random_state =", self.random_state, type(self.random_state))
-        print("  sampler =", self.sampler, type(self.sampler))
-        print("  n_jobs =", self.n_jobs, type(self.n_jobs))
-        print("  optimizer_backend =", self.optimizer_backend)
+        # print("  random_state =", self.random_state, type(self.random_state))
+        # print("  sampler =", self.sampler, type(self.sampler))
+        # print("  n_jobs =", self.n_jobs, type(self.n_jobs))
+        # print("  optimizer_backend =", self.optimizer_backend)
 
 
 

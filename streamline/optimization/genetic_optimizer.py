@@ -163,8 +163,8 @@ class GeneticOptimizer:
             use_importance_bias=bool(self.cfg.use_importance_bias),
         )
 
-        print(f"Initial population of size {len(population)} created.")
-        print(f"type(population) = {type(population)}")
+        # print(f"Initial population of size {len(population)} created.")
+        # print(f"type(population) = {type(population)}")
 
 
         population.evaluate(
