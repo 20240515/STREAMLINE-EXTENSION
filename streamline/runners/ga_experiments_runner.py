@@ -55,7 +55,7 @@ class GAExperimentsRunner:
         # =========================================================
         self.phase1_models = self.base_params.get(
             "ga_phase1_models",
-            ["LR", "RF", "SVM"]
+            ["LR", "RF", "XGB"]
         )
         self.final_models = self.base_params.get(
             "ga_final_models",
@@ -74,7 +74,7 @@ class GAExperimentsRunner:
         # =========================================================
         # Budget per phase
         # =========================================================
-        self.phase1_n_generations = int(self.base_params.get("ga_phase1_n_generations", 6))
+        self.phase1_n_generations = int(self.base_params.get("ga_phase1_n_generations", 50))
         self.phase2_n_generations = int(self.base_params.get("ga_phase2_n_generations", 12))
         self.phase3_n_generations = int(self.base_params.get("ga_phase3_n_generations", 50))
 
@@ -117,11 +117,11 @@ class GAExperimentsRunner:
         # =========================================================
         self.phase1_selection_methods = self.base_params.get(
             "ga_phase1_selection_methods",
-            ["tournament", "rank", "truncation"]
+            ["tournament"]
         )
         self.phase1_crossover_methods = self.base_params.get(
             "ga_phase1_crossover_methods",
-            ["uniform", "one_point"]
+            ["one_point"]
         )
 
         self.phase1_mutation_profiles = [
