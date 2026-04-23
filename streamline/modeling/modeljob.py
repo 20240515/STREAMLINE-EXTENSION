@@ -178,18 +178,18 @@ class ModelJob(Job):
         if getattr(model, 'optimizer_backend', None) == 'ga':
             self.pre_model_fi_scores = self.load_pre_model_fi_scores()
             
-        print("[DEBUG run_model] pre_model_fi_scores is None =", self.pre_model_fi_scores is None)
+        #print("[DEBUG run_model] pre_model_fi_scores is None =", self.pre_model_fi_scores is None)
 
-        if self.pre_model_fi_scores is not None:
-            print("[DEBUG run_model] n fi_scores =", len(self.pre_model_fi_scores))
-            print("[DEBUG run_model] primeiros 10 fi_scores =", self.pre_model_fi_scores[:10])
-            print("[DEBUG run_model] soma fi_scores =", float(np.sum(self.pre_model_fi_scores)))
-            print("[DEBUG run_model] min fi_score =", float(np.min(self.pre_model_fi_scores)))
-            print("[DEBUG run_model] max fi_score =", float(np.max(self.pre_model_fi_scores)))
+        # if self.pre_model_fi_scores is not None:
+        #     print("[DEBUG run_model] n fi_scores =", len(self.pre_model_fi_scores))
+        #     print("[DEBUG run_model] primeiros 10 fi_scores =", self.pre_model_fi_scores[:10])
+        #     print("[DEBUG run_model] soma fi_scores =", float(np.sum(self.pre_model_fi_scores)))
+        #     print("[DEBUG run_model] min fi_score =", float(np.min(self.pre_model_fi_scores)))
+        #     print("[DEBUG run_model] max fi_score =", float(np.max(self.pre_model_fi_scores)))
 
         model.fit(x_train, y_train, self.n_trials, self.timeout, self.feature_names, fi_scores=self.pre_model_fi_scores)
        
-        print("\n[DEBUG] Depois de model.fit()")
+        #print("\n[DEBUG] Depois de model.fit()")
         # print(f"[DEBUG] optimizer_backend = {getattr(model, 'optimizer_backend', None)}")
         # print(f"[DEBUG] has ga_best_individual = {hasattr(model, 'ga_best_individual')}")
         # print(f"[DEBUG] ga_best_individual is None = {getattr(model, 'ga_best_individual', None) is None}")

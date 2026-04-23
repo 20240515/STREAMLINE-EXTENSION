@@ -101,7 +101,6 @@ class Population:
                     m_init=m_init,
                     rng=rng,
                     fi_scores=fi_scores,
-                )
             else:
                 mask = init_feature_mask(M, m_init=m_init, rng=rng)
 
