@@ -194,6 +194,7 @@ class GeneticOptimizer:
             best_so_far = float(current_best.fitness)
 
         for gen in range(1, int(self.cfg.n_generations) + 1):
+            print (f"Generation {gen}/{self.cfg.n_generations} - Best fitness so far: {best_so_far}")
             population.sort()
 
             elites = self._copy_elites(population)
