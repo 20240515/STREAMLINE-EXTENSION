@@ -97,10 +97,12 @@ class Population:
 
             # --- Feature mask ---
             if use_importance_bias:
+                mask = _init_feature_mask_biased(
                     M=M,
                     m_init=m_init,
                     rng=rng,
                     fi_scores=fi_scores,
+                )
             else:
                 mask = init_feature_mask(M, m_init=m_init, rng=rng)
 
