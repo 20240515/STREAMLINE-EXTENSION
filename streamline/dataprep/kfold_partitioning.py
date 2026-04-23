@@ -4,6 +4,7 @@ from streamline.utils.job import Job
 from streamline.utils.dataset import Dataset
 from sklearn.model_selection import KFold, StratifiedKFold
 from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import train_test_split
 
 
 class KFoldPartitioner(Job):
@@ -42,32 +43,52 @@ class KFoldPartitioner(Job):
         self.cv = None
 
     def cv_partitioner(self, return_dfs=True, save_dfs=True, partition_method=None):
-        """
-
-        Takes data frame (data), number of cv partitions, partition method (R, S, or M), class label,
-        and the column name used for matched CV. Returns list of training and testing dataframe partitions.
-
-        Args:
-            return_dfs: flag to return splits as list of dataframe, returns empty list if set to False
-            save_dfs: save dataframes in experiment path folder
-            partition_method: override default partition method
-
-        Returns: train_df, test_df both list of dataframes of train and test splits
-
-        """
-
         if partition_method:
             self.partition_method = partition_method
 
         train_dfs, test_dfs = list(), list()
 
-        # Random Partitioning Method
+        # CASO ESPECIAL: holdout quando n_splits == 1
+        if self.n_splits == 1:
+            print("Holdout partitioning method selected. Generating single train/test split.")
+            if return_dfs:
+                if self.partition_method == "Group":
+                    raise Exception("Holdout com partition_method='Group' ainda não está implementado.")
+                elif self.partition_method == "Stratified":
+                    train_df, test_df = train_test_split(
+                        self.dataset.data,
+                        test_size=0.2,
+                        random_state=self.random_state,
+                        stratify=self.dataset.data[self.dataset.class_label]
+                    )
+                elif self.partition_method == "Random":
+                    train_df, test_df = train_test_split(
+                        self.dataset.data,
+                        test_size=0.2,
+                        random_state=self.random_state,
+                        shuffle=True
+                    )
+                else:
+                    raise Exception('Error: Requested partition method not found.')
+
+                train_dfs.append(train_df)
+                test_dfs.append(test_df)
+
+                self.train_dfs = train_dfs
+                self.test_dfs = test_dfs
+                self.cv = None
+
+            if save_dfs:
+                self.save_datasets(self.experiment_path, self.train_dfs, self.test_dfs)
+
+            return self.train_dfs, self.test_dfs
+
+        print(f"{self.n_splits}-fold partitioning method selected. Generating {self.n_splits} train/test splits.")
+        # CASO NORMAL: k-fold
         if self.partition_method == 'Random':
             cv = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
-        # Stratified Partitioning Method
         elif self.partition_method == 'Stratified':
             cv = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
-        # Group Partitioning Method
         elif self.partition_method == 'Group':
             cv = StratifiedGroupKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
         else:
@@ -79,16 +100,21 @@ class KFoldPartitioner(Job):
             if self.partition_method == "Group":
                 if self.dataset.match_label is None:
                     raise Exception("No Match Label in dataset")
-                for train_index, test_index in cv.split(self.dataset.feature_only_data(),
-                                                        self.dataset.data[self.dataset.class_label],
-                                                        self.dataset.data[self.dataset.match_label]):
+                for train_index, test_index in cv.split(
+                    self.dataset.feature_only_data(),
+                    self.dataset.data[self.dataset.class_label],
+                    self.dataset.data[self.dataset.match_label]
+                ):
                     train_dfs.append(self.dataset.data.iloc[train_index, :])
                     test_dfs.append(self.dataset.data.iloc[test_index, :])
             else:
-                for train_index, test_index in cv.split(self.dataset.feature_only_data(),
-                                                        self.dataset.data[self.dataset.class_label]):
+                for train_index, test_index in cv.split(
+                    self.dataset.feature_only_data(),
+                    self.dataset.data[self.dataset.class_label]
+                ):
                     train_dfs.append(self.dataset.data.iloc[train_index, :])
                     test_dfs.append(self.dataset.data.iloc[test_index, :])
+
             self.train_dfs = train_dfs
             self.test_dfs = test_dfs
 
@@ -96,6 +122,62 @@ class KFoldPartitioner(Job):
             self.save_datasets(self.experiment_path, self.train_dfs, self.test_dfs)
 
         return self.train_dfs, self.test_dfs
+
+    # def cv_partitioner(self, return_dfs=True, save_dfs=True, partition_method=None):
+    #     """
+
+    #     Takes data frame (data), number of cv partitions, partition method (R, S, or M), class label,
+    #     and the column name used for matched CV. Returns list of training and testing dataframe partitions.
+
+    #     Args:
+    #         return_dfs: flag to return splits as list of dataframe, returns empty list if set to False
+    #         save_dfs: save dataframes in experiment path folder
+    #         partition_method: override default partition method
+
+    #     Returns: train_df, test_df both list of dataframes of train and test splits
+
+    #     """
+
+    #     if partition_method:
+    #         self.partition_method = partition_method
+
+    #     train_dfs, test_dfs = list(), list()
+
+    #     # Random Partitioning Method
+    #     if self.partition_method == 'Random':
+    #         cv = KFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+    #     # Stratified Partitioning Method
+    #     elif self.partition_method == 'Stratified':
+    #         cv = StratifiedKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+    #     # Group Partitioning Method
+    #     elif self.partition_method == 'Group':
+    #         cv = StratifiedGroupKFold(n_splits=self.n_splits, shuffle=True, random_state=self.random_state)
+    #     else:
+    #         raise Exception('Error: Requested partition method not found.')
+
+    #     self.cv = cv
+
+    #     if return_dfs:
+    #         if self.partition_method == "Group":
+    #             if self.dataset.match_label is None:
+    #                 raise Exception("No Match Label in dataset")
+    #             for train_index, test_index in cv.split(self.dataset.feature_only_data(),
+    #                                                     self.dataset.data[self.dataset.class_label],
+    #                                                     self.dataset.data[self.dataset.match_label]):
+    #                 train_dfs.append(self.dataset.data.iloc[train_index, :])
+    #                 test_dfs.append(self.dataset.data.iloc[test_index, :])
+    #         else:
+    #             for train_index, test_index in cv.split(self.dataset.feature_only_data(),
+    #                                                     self.dataset.data[self.dataset.class_label]):
+    #                 train_dfs.append(self.dataset.data.iloc[train_index, :])
+    #                 test_dfs.append(self.dataset.data.iloc[test_index, :])
+    #         self.train_dfs = train_dfs
+    #         self.test_dfs = test_dfs
+
+    #     if save_dfs:
+    #         self.save_datasets(self.experiment_path, self.train_dfs, self.test_dfs)
+
+    #     return self.train_dfs, self.test_dfs
 
     def save_datasets(self, experiment_path=None, train_dfs=None, test_dfs=None):
         """ Saves individual training and testing CV datasets as .csv files"""
