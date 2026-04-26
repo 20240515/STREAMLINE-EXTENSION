@@ -61,6 +61,22 @@ def process_params(params):
     if 'do_ga_opt' not in params:
         params['do_ga_opt'] = False
 
+    if 'ga_dataset_aware_search' not in params:
+        params['ga_dataset_aware_search'] = False
+
+    if 'ga_calibration_models' not in params:
+        params['ga_calibration_models'] = ['LR', 'RF', 'NB']
+
+    if 'ga_final_models' not in params:
+        params['ga_final_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+
+    if params.get('ga_dataset_aware_search', False):
+        params['do_ga_opt'] = True
+        params['do_feat_imp'] = True
+        params['do_feat_sel'] = False
+        params['do_model'] = True
+        params['ga_config'] = None
+
     if params.get('do_ga_opt', False):
         # Ensure required phases
         params['do_model'] = True
@@ -79,21 +95,21 @@ def process_params(params):
     else:
         params['ga_config'] = None
 
-    
-    if 'ga_multi_phase_search' not in params:
-        params['ga_multi_phase_search'] = False
 
-    if 'ga_phase1_models' not in params:
-        params['ga_phase1_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+    # if 'ga_multi_phase_search' not in params:
+    #     params['ga_multi_phase_search'] = False
 
-    if 'ga_final_models' not in params:
-        params['ga_final_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+    # if 'ga_phase1_models' not in params:
+    #     params['ga_phase1_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
 
-    if params.get('ga_multi_phase_search', False):
-        params['do_ga_opt'] = True
-        params['do_feat_imp'] = True
-        params['do_feat_sel'] = False
-        params['do_model'] = True
+    # if 'ga_final_models' not in params:
+    #     params['ga_final_models'] = ['LR', 'RF', 'SVM', 'GB', 'ANN']
+
+    # if params.get('ga_multi_phase_search', False):
+    #     params['do_ga_opt'] = True
+    #     params['do_feat_imp'] = True
+    #     params['do_feat_sel'] = False
+    #     params['do_model'] = True
 
     return params
 

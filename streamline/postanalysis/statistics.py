@@ -1160,8 +1160,16 @@ class StatsJob(Job):
                 writer.writerow(["MultiSURF (Feature Importance)", 3, dict_obj['multisurf']])
             except KeyError:
                 pass
-            writer.writerow(["Feature Selection", 4, dict_obj['featureselection']])
+            if 'featureselection' in dict_obj:
+                writer.writerow(["Feature Selection", 4, dict_obj['featureselection']])
+                
+            # writer.writerow(["Feature Selection", 4, dict_obj['featureselection']])
             for algorithm in self.algorithms:  # Report runtimes for each algorithm
+                print("dict_obj keys:", dict_obj.keys())
+                print("self.abbrev:", self.abbrev)
+                print("self.algorithms:", self.algorithms)
+
+                
                 writer.writerow(([algorithm + "(Modeling)", 5, dict_obj[self.abbrev[algorithm]]]))
             writer.writerow(["Stats Summary", 6, dict_obj['Stats']])
 

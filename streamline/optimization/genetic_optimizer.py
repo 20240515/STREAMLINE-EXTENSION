@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
 import numpy as np
+import json
 
 from streamline.utils import fi_scores
 
@@ -68,7 +69,19 @@ class GeneticOptimizer:
             self.cfg = GeneticOptimizerConfig()
         else:
             self.cfg = cfg
+    #new
+    def _feature_mask_key(self, ind: Chromosome):
+        return tuple(np.asarray(ind.feature_mask).astype(int).tolist())
 
+    def _hyperparams_key(self, ind: Chromosome):
+        return json.dumps(ind.hyperparams, sort_keys=True, default=str)
+
+    def _full_individual_key(self, ind: Chromosome):
+        return (
+            self._feature_mask_key(ind),
+            self._hyperparams_key(ind),
+        )
+    # ########
 
     def _make_history_row(
         self,
@@ -83,7 +96,10 @@ class GeneticOptimizer:
         ]
 
         n_selected = [ind.n_selected() for ind in population.individuals]
-
+        feature_keys = [self._feature_mask_key(ind) for ind in population.individuals]
+        hp_keys = [self._hyperparams_key(ind) for ind in population.individuals]
+        full_keys = [self._full_individual_key(ind) for ind in population.individuals]
+        
         row = {
             "generation": int(generation),
             "population_size": int(len(population)),
@@ -94,6 +110,9 @@ class GeneticOptimizer:
             "mean_n_selected": None,
             "cache_hits": None,
             "cache_misses": None,
+            "unique_feature_masks": int(len(set(feature_keys))),
+            "unique_hyperparams": int(len(set(hp_keys))),
+            "unique_full_individuals": int(len(set(full_keys))),
             "early_stop_triggered": False,
         }
 
@@ -195,6 +214,7 @@ class GeneticOptimizer:
 
         for gen in range(1, int(self.cfg.n_generations) + 1):
             print (f"Generation {gen}/{self.cfg.n_generations} - Best fitness so far: {best_so_far}")
+            
             population.sort()
 
             elites = self._copy_elites(population)

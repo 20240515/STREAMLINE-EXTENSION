@@ -2,10 +2,15 @@ import glob
 import logging
 import math
 import os
+import json
+import glob
+from os import path
 import pickle
 import csv
 from datetime import datetime
 from pathlib import Path
+
+import matplotlib.pyplot as plt
 
 from streamline import __version__ as version
 import pandas as pd
@@ -44,7 +49,7 @@ class ReportJob(Job):
             self.datasets = os.listdir(self.experiment_path)
             remove_list = ['.DS_Store', 'metadata.pickle', 'metadata.csv', 'algInfo.pickle',
                            'DatasetComparisons', 'jobs', 'jobsCompleted', 'logs',
-                           'KeyFileCopy', 'dask_logs',
+                           'KeyFileCopy', 'dask_logs', 'ga_temp_runs',
                            experiment_name + '_STREAMLINE_Report.pdf']
             for item in remove_list:
                 if item in self.datasets:
@@ -106,6 +111,335 @@ class ReportJob(Job):
         self.metrics = None
 
         self.analysis_report = FPDF('P', 'mm', 'A4')
+    
+    def _path_exists(self, path):
+        return path is not None and os.path.exists(path)
+
+
+    def _safe_image(self, path, x=None, y=None, w=180, h=0, message=None):
+        """
+        Adds image to PDF only if it exists.
+        Prevents report crashes when optional STREAMLINE/GA figures are missing.
+        """
+        if os.path.exists(path):
+            if y is None:
+                self.analysis_report.image(path, x=x, w=w, h=h)
+            else:
+                self.analysis_report.image(path, x=x, y=y, w=w, h=h)
+        else:
+            self.analysis_report.set_font(family="times", size=9)
+            self.analysis_report.multi_cell(
+                w=0,
+                h=5,
+                txt=message or f"Figure not available: {os.path.basename(path)}",
+                border=0,
+                align="L"
+            )
+
+
+    def _is_ga_optimized_dataset(self, dataset_name):
+        """
+        Detects whether a dataset contains GA optimization outputs.
+        Works without requiring a new parameter in ReportRunner.
+        """
+        dataset_path = os.path.join(self.experiment_path, dataset_name)
+
+        ga_indicators = [
+            os.path.join(dataset_path, "models", "ga_history"),
+            os.path.join(dataset_path, "models", "ga_metadata"),
+            os.path.join(dataset_path, "models", "ga_summary.csv"),
+            os.path.join(dataset_path, "models", "ga_final_summary.csv"),
+        ]
+
+        return any(os.path.exists(p) for p in ga_indicators)
+
+
+    def _get_ga_metadata_files(self, dataset_name):
+        dataset_path = os.path.join(self.experiment_path, dataset_name)
+        metadata_dir = os.path.join(dataset_path, "models", "ga_metadata")
+
+        if not os.path.exists(metadata_dir):
+            return []
+
+        return sorted(glob.glob(os.path.join(metadata_dir, "*.json")))
+
+
+    def _read_ga_metadata(self, metadata_file):
+        try:
+            with open(metadata_file, "r") as f:
+                return json.load(f)
+        except Exception:
+            return None
+
+
+    def _extract_final_features_from_ga_metadata(self, metadata):
+        """
+        Tries several possible key names because the GA metadata format
+        may evolve during development.
+        """
+        if metadata is None:
+            return []
+
+        possible_keys = [
+            "selected_features",
+            "final_selected_features",
+            "best_features",
+            "features",
+            "feature_subset",
+            "selected_feature_names",
+        ]
+
+        for key in possible_keys:
+            value = metadata.get(key)
+            if isinstance(value, list):
+                return value
+
+        best_solution = metadata.get("best_solution")
+        if isinstance(best_solution, dict):
+            for key in possible_keys:
+                value = best_solution.get(key)
+                if isinstance(value, list):
+                    return value
+
+        return []
+
+
+    def _extract_ga_summary_row(self, metadata_file, metadata):
+        base = os.path.basename(metadata_file)
+        base = base.replace("_ga_metadata.json", "")
+        base = base.replace(".json", "")
+
+        features = self._extract_final_features_from_ga_metadata(metadata)
+
+        if metadata is None:
+            return {
+                "model_cv": base,
+                "algorithm": "NA",
+                "cv": "NA",
+                "best_fitness": "NA",
+                "n_selected_features": 0,
+                "selected_features": [],
+            }
+
+        return {
+            "model_cv": base,
+            "algorithm": metadata.get("algorithm", "NA"),
+            "cv": metadata.get("cv", metadata.get("cv_partition", "NA")),
+            "best_fitness": metadata.get("best_fitness", metadata.get("fitness", "NA")),
+            "n_selected_features": len(features),
+            "selected_features": features,
+        }
+
+    def _plot_ga_convergence(self, dataset_name):
+        """
+        Creates GA convergence plots from ga_history CSV files.
+        Expected columns: generation, best_fitness, mean_fitness, worst_fitness.
+        """
+
+        history_dir = os.path.join(
+            self.experiment_path,
+            dataset_name,
+            "models",
+            "ga_history"
+        )
+
+        if not os.path.exists(history_dir):
+            return []
+
+        output_dir = os.path.join(
+            self.experiment_path,
+            dataset_name,
+            "models",
+            "ga_convergence_plots"
+        )
+        os.makedirs(output_dir, exist_ok=True)
+
+        history_files = sorted(glob.glob(os.path.join(history_dir, "*.csv")))
+        plot_files = []
+
+        for history_file in history_files:
+            try:
+                df = pd.read_csv(history_file)
+
+                if "generation" not in df.columns or "best_fitness" not in df.columns:
+                    continue
+
+                plot_name = os.path.basename(history_file).replace(".csv", "_convergence.png")
+                plot_path = os.path.join(output_dir, plot_name)
+
+                plt.figure(figsize=(7, 4))
+                plt.plot(df["generation"], df["best_fitness"], label="Best fitness")
+
+                if "mean_fitness" in df.columns:
+                    plt.plot(df["generation"], df["mean_fitness"], label="Mean fitness")
+
+                if "worst_fitness" in df.columns:
+                    plt.plot(df["generation"], df["worst_fitness"], label="Worst fitness")
+
+                plt.xlabel("Generation")
+                plt.ylabel("Fitness")
+                plt.title("GA convergence")
+                plt.legend()
+                plt.tight_layout()
+                plt.savefig(plot_path, dpi=200)
+                plt.close()
+
+                plot_files.append(plot_path)
+
+            except Exception:
+                continue
+
+        return plot_files
+
+
+
+
+    def _publish_ga_optimization_summary(self, dataset_name):
+        """
+        Adds GA-specific report pages:
+        - GA detection
+        - final selected features per model/CV
+        - optional GA convergence plots/history if available
+        """
+        metadata_files = self._get_ga_metadata_files(dataset_name)
+
+        if len(metadata_files) == 0:
+            return
+
+        self.analysis_report.add_page()
+        self.analysis_report.set_font(family="times", style="B", size=14)
+        self.analysis_report.cell(
+            w=0,
+            h=8,
+            txt=f"GA Optimization Summary: {dataset_name}",
+            border=1,
+            align="L",
+            ln=2
+        )
+
+        self.analysis_report.set_font(family="times", size=10)
+        self.analysis_report.multi_cell(
+            w=0,
+            h=5,
+            txt=(
+                "This dataset was processed with the GA-based STREAMLINE extension. "
+                "The table below summarizes the final feature subsets identified by the genetic algorithm "
+                "for each model/CV run, when available."
+            ),
+            border=0,
+            align="L"
+        )
+
+        rows = []
+        for mf in metadata_files:
+            metadata = self._read_ga_metadata(mf)
+            rows.append(self._extract_ga_summary_row(mf, metadata))
+
+        self.analysis_report.ln(3)
+        self.analysis_report.set_font(family="times", style="B", size=9)
+
+        self.analysis_report.cell(45, 6, "Model/CV", border=1)
+        self.analysis_report.cell(25, 6, "Algorithm", border=1)
+        self.analysis_report.cell(25, 6, "Fitness", border=1)
+        self.analysis_report.cell(30, 6, "N features", border=1)
+        self.analysis_report.cell(55, 6, "Selected features", border=1, ln=1)
+
+        self.analysis_report.set_font(family="times", size=8)
+
+        for row in rows:
+            features_txt = ", ".join(map(str, row["selected_features"]))
+
+            if len(features_txt) > 90:
+                features_txt = features_txt[:90] + "..."
+
+            self.analysis_report.cell(45, 6, str(row["model_cv"])[:25], border=1)
+            self.analysis_report.cell(25, 6, str(row["algorithm"])[:12], border=1)
+            self.analysis_report.cell(25, 6, str(row["best_fitness"])[:10], border=1)
+            self.analysis_report.cell(30, 6, str(row["n_selected_features"]), border=1)
+            self.analysis_report.cell(55, 6, features_txt, border=1, ln=1)
+
+        self.analysis_report.ln(4)
+
+        # Optional: include GA history/convergence files if they exist
+        history_dir = os.path.join(
+            self.experiment_path,
+            dataset_name,
+            "models",
+            "ga_history"
+        )
+
+        if os.path.exists(history_dir):
+            history_files = sorted(glob.glob(os.path.join(history_dir, "*.csv")))
+
+            self.analysis_report.set_font(family="times", style="B", size=11)
+            self.analysis_report.cell(
+                w=0,
+                h=7,
+                txt="GA convergence/history files",
+                border=0,
+                align="L",
+                ln=1
+            )
+
+            self.analysis_report.set_font(family="times", size=8)
+
+            for hf in history_files[:20]:
+                self.analysis_report.cell(
+                    w=0,
+                    h=5,
+                    txt=os.path.basename(hf),
+                    border=0,
+                    align="L",
+                    ln=1
+                )
+
+            if len(history_files) > 20:
+                self.analysis_report.cell(
+                    w=0,
+                    h=5,
+                    txt=f"... plus {len(history_files) - 20} more history files.",
+                    border=0,
+                    align="L",
+                    ln=1
+                )
+            
+        convergence_plots = self._plot_ga_convergence(dataset_name)
+
+        if len(convergence_plots) > 0:
+            self.analysis_report.add_page()
+            self.analysis_report.set_font(family="times", style="B", size=14)
+            self.analysis_report.cell(
+                w=0,
+                h=8,
+                txt=f"GA Convergence Plots: {dataset_name}",
+                border=1,
+                align="L",
+                ln=2
+            )
+
+            x_positions = [10, 110]
+            y_positions = [20, 105, 190]
+
+            plot_count = 0
+
+            for plot_path in convergence_plots[:6]:
+                x = x_positions[plot_count % 2]
+                y = y_positions[plot_count // 2]
+
+                self.analysis_report.image(plot_path, x=x, y=y, w=90)
+
+                plot_count += 1
+
+            if len(convergence_plots) > 6:
+                self.analysis_report.set_xy(10, 275)
+                self.analysis_report.set_font(family="times", size=8)
+                self.analysis_report.cell(
+                    w=0,
+                    h=5,
+                    txt=f"Only first 6 convergence plots shown. Total available: {len(convergence_plots)}",
+                    border=0,
+                    align="L"
+                )
 
     def run(self):
         self.job()
@@ -834,16 +1168,33 @@ class ReportJob(Job):
                                           txt="Feature Importance Summary:  D" + str(k + 1) + ' = ' + self.datasets[k],
                                           border=1, align="L", ln=2)
                 self.analysis_report.set_font(family='times', size=9)
-                self.analysis_report.image(
-                    self.experiment_path + '/' + self.datasets[
-                        k] + '/feature_selection/mutual_information/TopAverageScores.png',
-                    5,
-                    12, 100, 135)  # Images adjusted to fit a width of 100 and length of 135
-                self.analysis_report.image(
-                    self.experiment_path + '/' + self.datasets[k] + '/feature_selection/multisurf/TopAverageScores.png',
-                    105, 12,
-                    100,
-                    135)
+
+                is_ga_opt= self._is_ga_optimized_dataset(self.datasets[k])
+                if is_ga_opt:
+                    self.analysis_report.set_xy(5, 15)
+                    self.analysis_report.multi_cell(
+                        w=190,
+                        h=5,
+                        txt=(
+                            "Standard STREAMLINE feature selection plots are not shown because "
+                            "feature selection was performed by the GA-based optimization module."
+                        ),
+                        border=0,
+                        align="L"
+                    )
+                    self._publish_ga_optimization_summary(self.datasets[k])
+                else:
+                    self.analysis_report.image(
+                        self.experiment_path + '/' + self.datasets[
+                            k] + '/feature_selection/mutual_information/TopAverageScores.png',
+                        5,
+                        12, 100, 135)  # Images adjusted to fit a width of 100 and length of 135
+                    self.analysis_report.image(
+                        self.experiment_path + '/' + self.datasets[k] + '/feature_selection/multisurf/TopAverageScores.png',
+                        105, 12,
+                        100,
+                        135)
+                self.analysis_report.add_page()   
                 self.analysis_report.x = 0
                 self.analysis_report.y = 150
                 self.analysis_report.cell(0, 8,

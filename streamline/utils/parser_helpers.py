@@ -380,11 +380,11 @@ def parse_model(argv, params_dict=None):
 
     parser.add_argument('--ga-p-hp-mut', dest='ga_p_hp_mut', type=float,
                         help='Probability of mutating hyperparameters in an individual.',
-                        default=0.3)
+                        default=0.5)
 
     parser.add_argument('--ga-hp-mut-frac', dest='ga_hp_mut_frac', type=float,
                         help='Fraction of hyperparameters to mutate when hyperparameter mutation occurs.',
-                        default=0.3)
+                        default=0.5)
 
     parser.add_argument('--ga-hp-mut-min', dest='ga_hp_mut_min', type=int,
                         help='Minimum number of hyperparameters to mutate.',
@@ -409,94 +409,165 @@ def parse_model(argv, params_dict=None):
                         help='Minimum number of generations before GA early stopping can trigger.',
                         default=5)
     # -----------------------------
-    # Automatic multi-phase GA search
+    # Dataset-Aware GA search 
     # -----------------------------
-    parser.add_argument('--ga-multi-phase-search', dest='ga_multi_phase_search',
+
+    parser.add_argument('--ga-dataset-aware-search', dest='ga_dataset_aware_search',
                         type=str2bool, nargs='?', const=True,
-                        help='Run the automatic 3-phase GA configuration search.',
+                        help='Run the dataset-aware GA search: fix operator family based on dataset dimensionality, calibrate internal parameters, then run final modelling.',
                         default=False)
 
-    parser.add_argument('--ga-phase1-models', dest='ga_phase1_models',
+    parser.add_argument('--ga-calibration-models', dest='ga_calibration_models',
                         type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
-                        help='Representative models used in phase 1.',
-                        default='LR,RF,SVM')
+                        help='Representative models used during GA calibration.',
+                        default='LR,RF,NB')
 
     parser.add_argument('--ga-final-models', dest='ga_final_models',
                         type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
-                        help='Final model subset used in phase 3.',
-                        default='LR,RF,SVM')
+                        help='Final model subset used in final GA modelling.',
+                        default='LR,RF,SVM,GB,ANN')
 
-    parser.add_argument('--ga-phase1-top-k', dest='ga_phase1_top_k', type=int,
-                        help='Number of top phase-1 configurations to keep.',
-                        default=3)
+    parser.add_argument('--ga-calibration-top-k', dest='ga_calibration_top_k', type=int,
+                        help='Number of top calibration configurations to keep for final modelling.',
+                        default=1)
 
-    parser.add_argument('--ga-phase2-top-k', dest='ga_phase2_top_k', type=int,
-                        help='Number of top phase-2 configurations to keep.',
-                        default=2)
-
-    parser.add_argument('--ga-phase1-population-size', dest='ga_phase1_population_size', type=int,
-                        help='Phase 1 GA population size.',
-                        default=10)
-
-    parser.add_argument('--ga-phase1-n-generations', dest='ga_phase1_n_generations', type=int,
-                        help='Phase 1 number of generations.',
-                        default=5)
-
-    parser.add_argument('--ga-phase2-population-size', dest='ga_phase2_population_size', type=int,
-                        help='Phase 2 GA population size.',
-                        default=20)
-
-    parser.add_argument('--ga-phase2-n-generations', dest='ga_phase2_n_generations', type=int,
-                        help='Phase 2 number of generations.',
-                        default=10)
-
-    parser.add_argument('--ga-phase3-population-size', dest='ga_phase3_population_size', type=int,
-                        help='Phase 3 GA population size.',
+    parser.add_argument('--ga-calibration-population-size', dest='ga_calibration_population_size', type=int,
+                        help='GA population size during calibration.',
                         default=30)
 
-    parser.add_argument('--ga-phase3-n-generations', dest='ga_phase3_n_generations', type=int,
-                        help='Phase 3 number of generations.',
-                        default=20)
-    
-    parser.add_argument('--ga-phase1-pop-min', dest='ga_phase1_pop_min', type=int,
-                        help='Minimum phase 1 population size when using adaptive population.',
+    parser.add_argument('--ga-calibration-n-generations', dest='ga_calibration_n_generations', type=int,
+                        help='Number of GA generations during calibration.',
                         default=20)
 
-    parser.add_argument('--ga-phase1-pop-max', dest='ga_phase1_pop_max', type=int,
-                        help='Maximum phase 1 population size when using adaptive population.',
-                        default=40)
+    parser.add_argument('--ga-final-population-size', dest='ga_final_population_size', type=int,
+                        help='GA population size during final modelling.',
+                        default=100)
 
-    parser.add_argument('--ga-phase1-pop-feature-frac', dest='ga_phase1_pop_feature_frac', type=float,
-                        help='Phase 1 adaptive population fraction of number of features.',
-                        default=0.25)
+    parser.add_argument('--ga-final-n-generations', dest='ga_final_n_generations', type=int,
+                        help='Number of GA generations during final modelling.',
+                        default=50)
 
-    parser.add_argument('--ga-phase2-pop-min', dest='ga_phase2_pop_min', type=int,
-                        help='Minimum phase 2 population size when using adaptive population.',
-                        default=25)
+    parser.add_argument('--ga-calibration-early-stop', dest='ga_calibration_early_stop',
+                        type=str2bool, nargs='?', const=True,
+                        help='Enable early stopping during GA calibration.',
+                        default=False)
 
-    parser.add_argument('--ga-phase2-pop-max', dest='ga_phase2_pop_max', type=int,
-                        help='Maximum phase 2 population size when using adaptive population.',
-                        default=60)
+    parser.add_argument('--ga-calibration-early-stop-patience', dest='ga_calibration_early_stop_patience', type=int,
+                        help='Calibration early stopping patience.',
+                        default=4)
 
-    parser.add_argument('--ga-phase2-pop-feature-frac', dest='ga_phase2_pop_feature_frac', type=float,
-                        help='Phase 2 adaptive population fraction of number of features.',
-                        default=0.35)
+    parser.add_argument('--ga-calibration-early-stop-min-delta', dest='ga_calibration_early_stop_min_delta', type=float,
+                        help='Calibration early stopping minimum delta.',
+                        default=1e-3)
 
-    parser.add_argument('--ga-phase3-early-stop', dest='ga_phase3_early_stop', type=str2bool, nargs='?', const=True,
-                        help='Enable early stopping in phase 3.',
+    parser.add_argument('--ga-calibration-early-stop-min-generations', dest='ga_calibration_early_stop_min_generations', type=int,
+                        help='Minimum calibration generations before early stopping.',
+                        default=6)
+
+    parser.add_argument('--ga-final-early-stop', dest='ga_final_early_stop',
+                        type=str2bool, nargs='?', const=True,
+                        help='Enable early stopping during final GA modelling.',
                         default=True)
 
-    parser.add_argument('--ga-phase3-early-stop-patience', dest='ga_phase3_early_stop_patience', type=int,
-                        help='Phase 3 early stopping patience.',
+    parser.add_argument('--ga-final-early-stop-patience', dest='ga_final_early_stop_patience', type=int,
+                        help='Final modelling early stopping patience.',
                         default=7)
 
-    parser.add_argument('--ga-phase3-early-stop-min-delta', dest='ga_phase3_early_stop_min_delta', type=float,
-                        help='Phase 3 early stopping minimum delta.',
+    parser.add_argument('--ga-final-early-stop-min-delta', dest='ga_final_early_stop_min_delta', type=float,
+                        help='Final modelling early stopping minimum delta.',
                         default=5e-4)
 
-    parser.add_argument('--ga-phase3-early-stop-min-generations', dest='ga_phase3_early_stop_min_generations', type=int,
-                        help='Phase 3 minimum generations before early stopping.',
+    parser.add_argument('--ga-final-early-stop-min-generations', dest='ga_final_early_stop_min_generations', type=int,
+                        help='Minimum final modelling generations before early stopping.',
                         default=10)
+
+
+    # parser.add_argument('--ga-multi-phase-search', dest='ga_multi_phase_search',
+    #                     type=str2bool, nargs='?', const=True,
+    #                     help='Run the automatic 3-phase GA configuration search.',
+    #                     default=False)
+
+    # parser.add_argument('--ga-phase1-models', dest='ga_phase1_models',
+    #                     type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
+    #                     help='Representative models used in phase 1.',
+    #                     default='LR,RF,SVM')
+
+    # parser.add_argument('--ga-final-models', dest='ga_final_models',
+    #                     type=comma_sep_choices(SUPPORTED_MODELS_SMALL),
+    #                     help='Final model subset used in phase 3.',
+    #                     default='LR,RF,SVM')
+
+    # parser.add_argument('--ga-phase1-top-k', dest='ga_phase1_top_k', type=int,
+    #                     help='Number of top phase-1 configurations to keep.',
+    #                     default=3)
+
+    # parser.add_argument('--ga-phase2-top-k', dest='ga_phase2_top_k', type=int,
+    #                     help='Number of top phase-2 configurations to keep.',
+    #                     default=2)
+
+    # parser.add_argument('--ga-phase1-population-size', dest='ga_phase1_population_size', type=int,
+    #                     help='Phase 1 GA population size.',
+    #                     default=10)
+
+    # parser.add_argument('--ga-phase1-n-generations', dest='ga_phase1_n_generations', type=int,
+    #                     help='Phase 1 number of generations.',
+    #                     default=5)
+
+    # parser.add_argument('--ga-phase2-population-size', dest='ga_phase2_population_size', type=int,
+    #                     help='Phase 2 GA population size.',
+    #                     default=20)
+
+    # parser.add_argument('--ga-phase2-n-generations', dest='ga_phase2_n_generations', type=int,
+    #                     help='Phase 2 number of generations.',
+    #                     default=10)
+
+    # parser.add_argument('--ga-phase3-population-size', dest='ga_phase3_population_size', type=int,
+    #                     help='Phase 3 GA population size.',
+    #                     default=30)
+
+    # parser.add_argument('--ga-phase3-n-generations', dest='ga_phase3_n_generations', type=int,
+    #                     help='Phase 3 number of generations.',
+    #                     default=20)
+    
+    # parser.add_argument('--ga-phase1-pop-min', dest='ga_phase1_pop_min', type=int,
+    #                     help='Minimum phase 1 population size when using adaptive population.',
+    #                     default=20)
+
+    # parser.add_argument('--ga-phase1-pop-max', dest='ga_phase1_pop_max', type=int,
+    #                     help='Maximum phase 1 population size when using adaptive population.',
+    #                     default=40)
+
+    # parser.add_argument('--ga-phase1-pop-feature-frac', dest='ga_phase1_pop_feature_frac', type=float,
+    #                     help='Phase 1 adaptive population fraction of number of features.',
+    #                     default=0.25)
+
+    # parser.add_argument('--ga-phase2-pop-min', dest='ga_phase2_pop_min', type=int,
+    #                     help='Minimum phase 2 population size when using adaptive population.',
+    #                     default=25)
+
+    # parser.add_argument('--ga-phase2-pop-max', dest='ga_phase2_pop_max', type=int,
+    #                     help='Maximum phase 2 population size when using adaptive population.',
+    #                     default=60)
+
+    # parser.add_argument('--ga-phase2-pop-feature-frac', dest='ga_phase2_pop_feature_frac', type=float,
+    #                     help='Phase 2 adaptive population fraction of number of features.',
+    #                     default=0.35)
+
+    # parser.add_argument('--ga-phase3-early-stop', dest='ga_phase3_early_stop', type=str2bool, nargs='?', const=True,
+    #                     help='Enable early stopping in phase 3.',
+    #                     default=True)
+
+    # parser.add_argument('--ga-phase3-early-stop-patience', dest='ga_phase3_early_stop_patience', type=int,
+    #                     help='Phase 3 early stopping patience.',
+    #                     default=7)
+
+    # parser.add_argument('--ga-phase3-early-stop-min-delta', dest='ga_phase3_early_stop_min_delta', type=float,
+    #                     help='Phase 3 early stopping minimum delta.',
+    #                     default=5e-4)
+
+    # parser.add_argument('--ga-phase3-early-stop-min-generations', dest='ga_phase3_early_stop_min_generations', type=int,
+    #                     help='Phase 3 minimum generations before early stopping.',
+    #                     default=10)
     
 
 

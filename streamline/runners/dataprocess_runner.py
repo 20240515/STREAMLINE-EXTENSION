@@ -141,7 +141,7 @@ class DataProcessRunner:
         self.save_metadata()
 
     def run(self, run_parallel=False):
-        # print("Running EDA on datasets in " + self.data_path + " and saving output to " + self.output_path + '/' + self.experiment_name)
+        print("Running EDA on datasets in " + self.data_path + " and saving output to " + self.output_path + '/' + self.experiment_name)
         # print("run_parallel value:", run_parallel)
 
         file_count, job_counter = 0, 0
